@@ -38,6 +38,7 @@
 --with-coroutine=ucontext \
 --with-git=git \
 --tls-priority=@QEMU,SYSTEM \
+--disable-af-xdp \
 --disable-attr \
 --disable-auth-pam \
 --disable-avx2 \

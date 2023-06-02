@@ -36,6 +36,9 @@ softmmu_ss.add(when: vde, if_true: files('vde.c'))
 if have_netmap
   softmmu_ss.add(files('netmap.c'))
 endif
+
+softmmu_ss.add(when: libxdp, if_true: files('af-xdp.c'))
+
 if have_vhost_net_user
   softmmu_ss.add(when: 'CONFIG_VIRTIO_NET', if_true: files('vhost-user.c'), if_false: files('vhost-user-stub.c'))
   softmmu_ss.add(when: 'CONFIG_ALL', if_true: files('vhost-user-stub.c'))
