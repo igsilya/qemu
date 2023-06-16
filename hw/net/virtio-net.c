@@ -1864,6 +1864,29 @@ static int virtio_net_process_rss(NetClientState *nc, const uint8_t *buf,
     return (index == new_index) ? -1 : new_index;
 }
 
+static void virtio_net_rx_notify_bh(void *opaque)
+{
+    VirtIONetQueue *q = opaque;
+    VirtIONet *n = q->n;
+    VirtIODevice *vdev = VIRTIO_DEVICE(n);
+
+    /* This happens when device was stopped but BH wasn't. */
+    if (!vdev->vm_running) {
+        /* Make sure rx waiting is set, so we'll run when restarted. */
+        assert(q->rx_waiting);
+        return;
+    }
+
+    /* Just in case the driver is not ready on more */
+    if (!(vdev->status & VIRTIO_CONFIG_S_DRIVER_OK)) {
+        return;
+    }
+
+    virtio_notify(vdev, q->rx_vq);
+    q->rx_waiting = 0;
+}
+
+
 static ssize_t virtio_net_receive_rcu(NetClientState *nc, const uint8_t *buf,
                                       size_t size, bool no_rss)
 {
@@ -1994,7 +2017,11 @@ static ssize_t virtio_net_receive_rcu(NetClientState *nc, const uint8_t *buf,
     }
 
     virtqueue_flush(q->rx_vq, i);
-    virtio_notify(vdev, q->rx_vq);
+
+    if (!q->rx_waiting) {
+        q->rx_waiting = 1;
+        qemu_bh_schedule(q->rx_bh);
+    }
 
     return size;
 
@@ -2923,6 +2950,11 @@ static void virtio_net_add_queue(VirtIONet *n, int index)
                                                   &DEVICE(vdev)->mem_reentrancy_guard);
     }
 
+    n->vqs[index].rx_bh = qemu_bh_new_guarded(virtio_net_rx_notify_bh,
+                                              &n->vqs[index],
+                                              &DEVICE(vdev)->mem_reentrancy_guard);
+
+    n->vqs[index].rx_waiting = 0;
     n->vqs[index].tx_waiting = 0;
     n->vqs[index].n = n;
 }
